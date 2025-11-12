@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"go-be/database"
 	"go-be/models"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -118,18 +119,33 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return CreateInvoiceResponse{}, err
+		return CreateInvoiceResponse{}, fmt.Errorf("Gagal koneksi ke Duitku: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 4. Proses Response
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return CreateInvoiceResponse{}, fmt.Errorf("Gagal membaca body respons Duitku: %w", readErr)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+
+		var duitkuErrorResp CreateInvoiceResponse
+		json.Unmarshal(bodyBytes, &duitkuErrorResp)
+		if duitkuErrorResp.StatusMessage != "" {
+			return CreateInvoiceResponse{}, errors.New("Duitku API HTTP Status " + strconv.Itoa(resp.StatusCode) + ": " + duitkuErrorResp.StatusMessage)
+		}
+		return CreateInvoiceResponse{}, fmt.Errorf("Duitku API returned HTTP Status %d. Raw Body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
 	var duitkuResponse CreateInvoiceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&duitkuResponse); err != nil {
-		return CreateInvoiceResponse{}, err
+
+	if err := json.Unmarshal(bodyBytes, &duitkuResponse); err != nil {
+		return CreateInvoiceResponse{}, fmt.Errorf("Gagal mendekode JSON respons Duitku: %w", err)
 	}
 
 	if duitkuResponse.StatusCode != "00" {
-		return duitkuResponse, errors.New("Duitku API Error: " + duitkuResponse.StatusMessage)
+		return duitkuResponse, errors.New("Duitku API Error (Code: " + duitkuResponse.StatusCode + "): " + duitkuResponse.StatusMessage)
 	}
 
 	return duitkuResponse, nil

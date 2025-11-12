@@ -115,6 +115,11 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 
 	payloadBytes, _ := json.Marshal(payload)
 
+	fmt.Println("----------------------------------------")
+	fmt.Println("DUITKU SIGNATURE:", signature)
+	fmt.Println("DUITKU PAYLOAD:", string(payloadBytes))
+	fmt.Println("----------------------------------------")
+
 	// 3. Kirim HTTP Request
 	req, err := http.NewRequest("POST", DUITKU_ENDPOINT, bytes.NewBuffer(payloadBytes))
 	if err != nil {

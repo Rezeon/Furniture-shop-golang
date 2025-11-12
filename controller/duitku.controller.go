@@ -81,21 +81,32 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 
 	// 2. Siapkan Payload
 	var items []ItemDetail
+	var checkTotal uint = 0
+
 	for _, item := range cart.Items {
+		itemPrice := item.Product.Price
+		itemQuantity := item.Quantity
+
+		checkTotal += itemPrice * itemQuantity
+
 		items = append(items, ItemDetail{
 			Name:     item.Product.Name,
-			Price:    item.Product.Price,
-			Quantity: item.Quantity,
+			Price:    itemPrice,
+			Quantity: itemQuantity,
 		})
 	}
 
+	if checkTotal != order.TotalPrice {
+		return CreateInvoiceResponse{}, fmt.Errorf("Internal data inconsistency: Calculated total price (%d) does not match Order's TotalPrice (%d). Cannot send to Duitku.", checkTotal, order.TotalPrice)
+	}
+
 	payload := CreateInvoiceRequest{
-		PaymentAmount:   order.TotalPrice,
-		MerchantOrderID: strconv.FormatUint(uint64(order.ID), 10), // Order ID Anda
+		PaymentAmount:   checkTotal,
+		MerchantOrderID: strconv.FormatUint(uint64(order.ID), 10),
 		ProductDetails:  "Pembayaran Pesanan #" + strconv.FormatUint(uint64(order.ID), 10),
 		Email:           customerEmail,
 		PhoneNumber:     customerPhone,
-		CustomerVaName:  "Customer " + strconv.FormatUint(uint64(order.UserID), 10), // Ganti dengan nama user asli
+		CustomerVaName:  "Customer " + strconv.FormatUint(uint64(order.UserID), 10),
 		ItemDetails:     items,
 		CallbackUrl:     DUITKU_CALLBACK_URL,
 		ReturnUrl:       DUITKU_RETURN_URL,

@@ -1,0 +1,40 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace files (Go modules)
+go.work
+
+# Vendor directory (dependencies, optional)
+vendor/
+
+# Dependency files (track go.mod and go.sum)
+# Ignore go.sum only if you regenerate it frequently
+# go.sum
+
+# Coverage files
+*.coverprofile
+cover.out
+
+# IDE/editor folders
+.vscode/
+.idea/
+*.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+# Environment files
+.env
+.env.local
+.env.*.local

@@ -90,7 +90,7 @@ func Checkout(c *gin.Context) {
 	customerEmail := user.Email
 	customerPhone := user.Address.PhoneNumber
 
-	duitkuResp, err := createDuitkuInvoice(newOrder, activeCart, customerEmail, customerPhone)
+	duitkuResp, err := createDuitkuInvoice(newOrder, activeCart, customerEmail, customerPhone, user)
 
 	if err != nil {
 		// Jika Duitku gagal, rollback order (Opsional, tapi disarankan)

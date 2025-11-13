@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"go-be/database"
 	"go-be/models"
+	"go-be/utils"
 	"io"
 	"net/http"
 	"os"
@@ -31,21 +32,39 @@ var DUITKU_ENDPOINT = os.Getenv("DUITKU_ENDPOINT")
 
 type ItemDetail struct {
 	Name     string `json:"name"`
-	Price    uint   `json:"price"` // Harga per unit
+	Price    uint   `json:"price"`
 	Quantity uint   `json:"quantity"`
 }
 
+type AddressDetail struct {
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	Address     string `json:"address"`
+	City        string `json:"city"`
+	PostalCode  string `json:"postalCode"`
+	Phone       string `json:"phone"`
+	CountryCode string `json:"countryCode"`
+}
+type CustomerDetail struct {
+	FirstName       string        `json:"firstName"`
+	LastName        string        `json:"lastName"`
+	Email           string        `json:"email"`
+	PhoneNumber     string        `json:"phoneNumber"`
+	BillingAddress  AddressDetail `json:"billingAddress"`
+	ShippingAddress AddressDetail `json:"shippingAddress,omitempty"` // Tambahkan omitempty jika opsional
+}
 type CreateInvoiceRequest struct {
-	PaymentAmount   uint         `json:"paymentAmount"`
-	MerchantOrderID string       `json:"merchantOrderId"`
-	ProductDetails  string       `json:"productDetails"`
-	Email           string       `json:"email"`
-	PhoneNumber     string       `json:"phoneNumber"`
-	CustomerVaName  string       `json:"customerVaName"`
-	ItemDetails     []ItemDetail `json:"itemDetails"`
-	CallbackUrl     string       `json:"callbackUrl"`
-	ReturnUrl       string       `json:"returnUrl"`
-	ExpiryPeriod    int          `json:"expiryPeriod"`
+	PaymentAmount   uint           `json:"paymentAmount"`
+	MerchantOrderID string         `json:"merchantOrderId"`
+	ProductDetails  string         `json:"productDetails"`
+	Email           string         `json:"email"`
+	PhoneNumber     string         `json:"phoneNumber"`
+	CustomerVaName  string         `json:"customerVaName"`
+	ItemDetails     []ItemDetail   `json:"itemDetails"`
+	CustomerDetail  CustomerDetail `json:"customerDetail"`
+	CallbackUrl     string         `json:"callbackUrl"`
+	ReturnUrl       string         `json:"returnUrl"`
+	ExpiryPeriod    int            `json:"expiryPeriod"`
 }
 
 type CreateInvoiceResponse struct {
@@ -70,7 +89,14 @@ type DuitkuCallbackInput struct {
 // --- Helper Functions ---
 
 // createDuitkuInvoice mengirim request ke API Duitku untuk membuat invoice.
-func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail string, customerPhone string) (CreateInvoiceResponse, error) {
+// createDuitkuInvoice mengirim request ke API Duitku untuk membuat invoice.
+func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail string, customerPhone string, user models.User) (CreateInvoiceResponse, error) {
+
+	// Tambahkan Validasi Konfigurasi Wajib
+	if DUITKU_MERCHANT_CODE == "" || DUITKU_API_KEY == "" || DUITKU_ENDPOINT == "" {
+		return CreateInvoiceResponse{}, errors.New("Duitku API configuration is missing. Check environment variables.")
+	}
+
 	timestamp := strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10)
 
 	// 1. Buat Signature SHA256(merchantCode + timestamp + apiKey)
@@ -83,6 +109,29 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 	var items []ItemDetail
 	var checkTotal uint = 0
 
+	// 2a. Siapkan Address Detail (Billing & Shipping)
+	billingAddress := AddressDetail{
+		// Pastikan field di models.User.Address benar
+		FirstName:   user.Name,
+		LastName:    user.Name,
+		Address:     user.Address.AddressPlace,
+		City:        user.Address.AddressPlace, // Jika kota sama dengan AddressPlace
+		PostalCode:  utils.UintToString(user.Address.Postalcode),
+		Phone:       user.Address.PhoneNumber,
+		CountryCode: "ID",
+	}
+
+	// 2b. Siapkan Customer Detail (Menggabungkan data & alamat)
+	customerDtl := CustomerDetail{
+		FirstName:       billingAddress.FirstName,
+		LastName:        billingAddress.LastName,
+		Email:           customerEmail,
+		PhoneNumber:     customerPhone,
+		BillingAddress:  billingAddress,
+		ShippingAddress: billingAddress, // Menggunakan Billing Address untuk Shipping
+	}
+
+	// 2c. Hitung Total dan Siapkan Item Details
 	for _, item := range cart.Items {
 		itemPrice := item.Product.Price
 		itemQuantity := item.Quantity
@@ -96,10 +145,12 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 		})
 	}
 
+	// Validasi Total
 	if checkTotal != order.TotalPrice {
 		return CreateInvoiceResponse{}, fmt.Errorf("Internal data inconsistency: Calculated total price (%d) does not match Order's TotalPrice (%d). Cannot send to Duitku.", checkTotal, order.TotalPrice)
 	}
 
+	// 2d. Buat Struct Payload
 	payload := CreateInvoiceRequest{
 		PaymentAmount:   checkTotal,
 		MerchantOrderID: strconv.FormatUint(uint64(order.ID), 10),
@@ -108,6 +159,7 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 		PhoneNumber:     customerPhone,
 		CustomerVaName:  "Customer " + strconv.FormatUint(uint64(order.UserID), 10),
 		ItemDetails:     items,
+		CustomerDetail:  customerDtl, // 👈 GUNAKAN customerDtl BERTIPE CustomerDetail
 		CallbackUrl:     DUITKU_CALLBACK_URL,
 		ReturnUrl:       DUITKU_RETURN_URL,
 		ExpiryPeriod:    30, // 30 menit
@@ -115,6 +167,7 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 
 	payloadBytes, _ := json.Marshal(payload)
 
+	// Logging
 	fmt.Println("----------------------------------------")
 	fmt.Println("DUITKU SIGNATURE:", signature)
 	fmt.Println("DUITKU PAYLOAD:", string(payloadBytes))
@@ -126,26 +179,29 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 		return CreateInvoiceResponse{}, err
 	}
 
+	// Set Headers
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-duitku-signature", signature)
 	req.Header.Set("x-duitku-timestamp", timestamp)
 	req.Header.Set("x-duitku-merchantcode", DUITKU_MERCHANT_CODE)
 
-	client := &http.Client{}
+	// Klien dengan Timeout
+	client := &http.Client{Timeout: 10 * time.Second} //  Tambahkan Timeout
 	resp, err := client.Do(req)
+
+	// ... Sisa penanganan respons (Sudah Benar)
 	if err != nil {
-		return CreateInvoiceResponse{}, fmt.Errorf("Gagal koneksi ke Duitku: %w", err)
+		return CreateInvoiceResponse{}, fmt.Errorf("Gagal koneksi ke Duitku (Timeout/Jaringan): %w", err)
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		return CreateInvoiceResponse{}, fmt.Errorf("Gagal membaca body respons Duitku: %w", readErr)
-	}
+	// ... [Penanganan Baca Body, Status Code, dan Unmarshal sisa kode Anda] ...
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	// ... [Sisa kode penanganan error dan unmarshal] ...
 
 	if resp.StatusCode != http.StatusOK {
-
 		var duitkuErrorResp CreateInvoiceResponse
 		json.Unmarshal(bodyBytes, &duitkuErrorResp)
 		if duitkuErrorResp.StatusMessage != "" {
@@ -155,7 +211,6 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 	}
 
 	var duitkuResponse CreateInvoiceResponse
-
 	if err := json.Unmarshal(bodyBytes, &duitkuResponse); err != nil {
 		return CreateInvoiceResponse{}, fmt.Errorf("Gagal mendekode JSON respons Duitku: %w", err)
 	}

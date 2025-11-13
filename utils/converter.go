@@ -6,6 +6,11 @@ func StringToUint(s string) uint {
 	val, _ := strconv.ParseUint(s, 10, 32)
 	return uint(val) // fungsi ini bertujuan mengubah string ke uint
 }
+func UintToString(s uint) string {
+	v := uint64(s)
+	val := strconv.FormatUint(v, 10)
+	return string(val) // fungsi ini bertujuan mengubah string ke uint
+}
 func InterfaceToUint(val interface{}) uint {
 	switch v := val.(type) { // fungsi ini mengubah interface ke uintt
 	case float64:

@@ -158,7 +158,6 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 		Email:           customerEmail,
 		PhoneNumber:     customerPhone,
 		CustomerVaName:  "Customer " + strconv.FormatUint(uint64(order.UserID), 10),
-		ItemDetails:     items,
 		CustomerDetail:  customerDtl, // 👈 GUNAKAN customerDtl BERTIPE CustomerDetail
 		CallbackUrl:     DUITKU_CALLBACK_URL,
 		ReturnUrl:       DUITKU_RETURN_URL,
@@ -178,7 +177,6 @@ func createDuitkuInvoice(order models.Order, cart models.Cart, customerEmail str
 	if err != nil {
 		return CreateInvoiceResponse{}, err
 	}
-
 	// Set Headers
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")

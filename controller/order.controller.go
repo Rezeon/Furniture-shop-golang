@@ -108,12 +108,12 @@ func Checkout(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Invoice pembayaran berhasil dibuat.",
+		"message":    "Invoice pembayaran berhasil dibuat.",
+		"paymentUrl": duitkuResp.PaymentUrl, // URL untuk diarahkan/pop-up
 		"order": gin.H{
 			"id":         newOrder.ID,
 			"totalPrice": totalPrice,
 			"reference":  duitkuResp.Reference,
-			"paymentUrl": duitkuResp.PaymentUrl, // URL untuk diarahkan/pop-up
 		},
 	})
 }

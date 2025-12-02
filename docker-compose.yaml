@@ -14,6 +14,7 @@ services:
       - .env
     networks:
       - golang_network
+    command: sh -c "sleep 10 && /root/go-market"
   redis:
     container_name: my-redis
     image: redis:latest

@@ -12,14 +12,12 @@ import (
 var RedisClient *redis.Client
 
 func InitRedis() {
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-		log.Printf("Peringatan: REDIS_ADDR tidak disetel, menggunakan default: %s", redisAddr)
-	}
 
 	RedisClient = redis.NewClient(&redis.Options{
-		Addr: redisAddr,
+		Addr:     os.Getenv("REDIS_ADDR"),
+		Username: os.Getenv("REDIS_USERNAME"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
 	})
 
 	maxRetries := 5
@@ -32,9 +30,6 @@ func InitRedis() {
 			fmt.Println("Koneksi Redis berhasil.")
 			return
 		}
-
-		log.Printf("Gagal terhubung ke Redis (Percobaan %d/%d ke %s): %v", i+1, maxRetries, redisAddr, err)
-
 		if i < maxRetries-1 {
 			time.Sleep(retryDelay)
 		}

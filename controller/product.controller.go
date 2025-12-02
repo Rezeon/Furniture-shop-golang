@@ -1,15 +1,21 @@
 package controller
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"go-be/database"
 	"go-be/models"
 	"go-be/utils"
+	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+var ctx = context.Background()
 
 func CreateProduct(c *gin.Context) {
 
@@ -20,6 +26,7 @@ func CreateProduct(c *gin.Context) {
 		CategoryID  uint   `form:"categoryId" json:"categoryId"`
 	}
 	// masukan data ke input
+
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusNoContent, gin.H{"error": "please input correctly"})
 		return
@@ -70,11 +77,19 @@ func CreateProduct(c *gin.Context) {
 
 func GetProduct(c *gin.Context) {
 	var product []models.Product
-
+	chaceKey := "product:list:10"
+	chacheList, err := utils.RedisClient.Get(ctx, chaceKey).Result()
+	if err == nil {
+		log.Printf("INFO: Cache Hit untuk kunci: %s", chaceKey)
+		c.JSON(http.StatusOK, json.RawMessage(chacheList))
+		return
+	}
 	if err := database.DB.Preload("Category").Find(&product).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server error"})
 		return
 	}
+	productJson, _ := json.Marshal(product)
+	utils.RedisClient.Set(ctx, chaceKey, productJson, 5*time.Minute)
 
 	c.JSON(http.StatusOK, product)
 }
@@ -82,19 +97,27 @@ func GetProduct(c *gin.Context) {
 func GetProductByID(c *gin.Context) {
 	id := c.Param("id")
 	var product models.Product
+	cacheKey := fmt.Sprintf("product:%s", id)
 
+	chacheData, err := utils.RedisClient.Get(ctx, cacheKey).Result()
+	if err == nil {
+		log.Printf("INFO: Cache Hit untuk kunci: %s", chacheData)
+		c.JSON(http.StatusOK, chacheData)
+		return
+	}
 	if err := database.DB.Preload("Category").First(&product, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server internal error"})
 		return
 	}
-
+	productJson, _ := json.Marshal(product)
+	utils.RedisClient.Set(ctx, cacheKey, productJson, 5*time.Minute)
 	c.JSON(http.StatusOK, product)
 }
 
 func UpdateProduct(c *gin.Context) {
 	id := c.Param("id")
 	var product models.Product
-
+	cacheKey := fmt.Sprintf("product:%s", id)
 	//  Cari produk berdasarkan ID
 	if err := database.DB.First(&product, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "product not found"})
@@ -142,6 +165,10 @@ func UpdateProduct(c *gin.Context) {
 	// Update data ke database
 	database.DB.Save(&product)
 	database.DB.First(&product, id)
+	_, redisErr := utils.RedisClient.Del(ctx, cacheKey).Result()
+	if redisErr != nil {
+		log.Printf("Warning: Gagal menghapus cache saat update: %v", redisErr)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "product updated successfully",
 		"data":    product,
@@ -150,7 +177,7 @@ func UpdateProduct(c *gin.Context) {
 
 func DeleteProduct(c *gin.Context) {
 	id := c.Param("id")
-
+	cacheKey := fmt.Sprintf("product:%s", id)
 	var product models.Product
 	// cari product berdasarkan id
 	if err := database.DB.First(&product, id).Error; err != nil {
@@ -160,6 +187,10 @@ func DeleteProduct(c *gin.Context) {
 	//hapus image dari claudinary
 	utils.DeleteImage(product.PublicID)
 	//delete product dari database
+	_, redisErr := utils.RedisClient.Del(ctx, cacheKey).Result()
+	if redisErr != nil {
+		log.Printf("Warning: Gagal menghapus cache saat update: %v", redisErr)
+	}
 	database.DB.Delete(&product)
 	c.JSON(http.StatusOK, gin.H{"message": "product deleted"})
 }

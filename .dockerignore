@@ -1,0 +1,17 @@
+# Git & Docker files
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# Environment & Temp files
+.env
+*/tempImage
+*.log
+tmp/
+vendor/
+
+# Compiled files
+*/main
+*.test
+*.bin

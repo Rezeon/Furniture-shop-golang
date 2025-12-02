@@ -8,6 +8,7 @@ import (
 	"go-be/database"
 	"go-be/models"
 	"go-be/route"
+	"go-be/utils"
 
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -26,6 +27,8 @@ func main() {
 
 	// Connect Database
 	database.ConnectDB()
+	utils.InitRedis()
+	defer utils.RedisClient.Close()
 	err := database.DB.AutoMigrate(
 		&models.User{},
 		&models.Address{},

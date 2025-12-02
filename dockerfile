@@ -8,8 +8,6 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o app
-
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o go-market ./main.go
 
 ENTRYPOINT ["./go-market"]

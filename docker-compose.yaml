@@ -2,9 +2,12 @@ version: "3.8"
 services: 
   golang: 
     container_name: marketGo
+    build: 
+      context: .
+      dockerfile: Dockerfile
     image: golang:1.25
     ports: 
-      - 8080:8080
+      - "8080:8080"
     depends_on:
       - redis
     env_file:
@@ -13,9 +16,9 @@ services:
       - golang_network
   redis:
     container_name: my-redis
-    image: redis
+    image: redis:latest
     ports: 
-      - 6379:6379
+      - "6379:6379"
     networks:
       - golang_network
 networks:

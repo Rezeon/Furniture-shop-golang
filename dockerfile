@@ -10,4 +10,6 @@ COPY . .
 
 RUN go build -o app
 
-CMD [ "./app" ]
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o go-market ./main.go
+
+ENTRYPOINT ["./go-market"]

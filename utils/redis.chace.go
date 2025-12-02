@@ -30,7 +30,7 @@ func InitRedis() {
 
 		if err == nil {
 			fmt.Println("Koneksi Redis berhasil.")
-			return // KELUAR DARI FUNGSI JIKA BERHASIL
+			return
 		}
 
 		log.Printf("Gagal terhubung ke Redis (Percobaan %d/%d ke %s): %v", i+1, maxRetries, redisAddr, err)
